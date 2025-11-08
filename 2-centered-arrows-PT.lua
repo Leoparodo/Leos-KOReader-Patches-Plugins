@@ -10,8 +10,6 @@
 --]]
 
 local userpatch = require("userpatch")
-local Menu = require("ui/widget/menu")
-local updatePageInfo_orig = Menu.updatePageInfo
 
 local function patchCoverBrowser(plugin)
     local RightContainer = require("ui/widget/container/rightcontainer")
@@ -20,6 +18,18 @@ local function patchCoverBrowser(plugin)
     -- Store originals
     local RightContainer_paintTo_orig = RightContainer.paintTo
     local TextWidget_paintTo_orig = TextWidget.paintTo
+    local Menu = require("ui/widget/menu")
+    local updatePageInfo_orig = Menu.updatePageInfo
+
+    Menu.updatePageInfo = function(self, select_number)
+        self.footer_config = {
+            order = {
+            },
+            wifi_show_disabled = true,
+            frontlight_show_off = true,
+        }
+        updatePageInfo_orig(self, select_number)
+    end
     
     -- Override RightContainer.paintTo to center horizontally
     RightContainer.paintTo = function(self, bb, x, y)
@@ -29,30 +39,26 @@ local function patchCoverBrowser(plugin)
             local screen_w = Screen:getWidth()
             local ratio = self.dimen.w / screen_w
             if ratio > 0.95 and ratio < 1.0 then
-                -- This is the page controls, center the content horizontally
-                local content_w = self[1]:getSize().w
-                x = x - (self.dimen.w - content_w) / 2
+                -- Calculate and store the centered x position on first paint
+                if not self._pt_centered_x then
+                    local content_w = self[1]:getSize().w
+                    self._pt_centered_x = x - (self.dimen.w - content_w) / 2
+                end
+                x = self._pt_centered_x
             end
         end
         return RightContainer_paintTo_orig(self, bb, x, y)
     end
     
-    Menu.updatePageInfo = function(self, select_number)
-    self.footer_config = {
-        order = {
-        },
-        wifi_show_disabled = true,
-        frontlight_show_off = true,
-    }
-    updatePageInfo_orig(self, select_number)
-end
-    
     -- Override TextWidget.paintTo to adjust page text vertically
     TextWidget.paintTo = function(self, bb, x, y)
         -- Check if this text looks like it's the page info (contains "of")
         if self.text and type(self.text) == "string" and self.text:match("%d+%s+of%s+%d+") then
-            -- Move the text down slightly
-            y = y + 8
+            -- Calculate and store the adjusted y position on first paint
+            if not self._pt_adjusted_y then
+                self._pt_adjusted_y = y + 2
+            end
+            y = self._pt_adjusted_y
         end
         return TextWidget_paintTo_orig(self, bb, x, y)
     end
